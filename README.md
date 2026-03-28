@@ -11,6 +11,9 @@ claude-code-tracker/
     └── shared/       ← Shared types / utilities
 ```
 
+<img width="1512" height="862" alt="image" src="https://github.com/user-attachments/assets/33bbe1d0-04a2-4cb1-9582-059f1efab903" />
+
+
 ## Prerequisites
 
 - Node.js 18+
