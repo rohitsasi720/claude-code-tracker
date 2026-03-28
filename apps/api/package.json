@@ -1,0 +1,13 @@
+{
+  "name": "@claude-tracker/api",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "@claude-tracker/shared": "*"
+  }
+}
