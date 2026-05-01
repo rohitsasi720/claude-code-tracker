@@ -17,13 +17,19 @@ const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
 
+// Per-million-token USD list rates from anthropic.com/pricing.
+// Opus 4.5+ was repriced from $15/$75 to $5/$25 (cache write/read scaled
+// proportionally). Opus 4.1 and earlier remain on the legacy $15/$75 tier.
 const PRICING = {
-  'claude-opus-4-6':  { input: 15,   output: 75,  cacheWrite: 18.75, cacheRead: 1.50 },
-  'claude-opus-4-5':  { input: 15,   output: 75,  cacheWrite: 18.75, cacheRead: 1.50 },
+  'claude-opus-4-7':  { input: 5,    output: 25,  cacheWrite: 6.25,  cacheRead: 0.50 },
+  'claude-opus-4-6':  { input: 5,    output: 25,  cacheWrite: 6.25,  cacheRead: 0.50 },
+  'claude-opus-4-5':  { input: 5,    output: 25,  cacheWrite: 6.25,  cacheRead: 0.50 },
+  'claude-opus-4-1':  { input: 15,   output: 75,  cacheWrite: 18.75, cacheRead: 1.50 },
+  'claude-sonnet-4-7':{ input: 3,    output: 15,  cacheWrite: 3.75,  cacheRead: 0.30 },
   'claude-sonnet-4-6':{ input: 3,    output: 15,  cacheWrite: 3.75,  cacheRead: 0.30 },
   'claude-sonnet-4-5':{ input: 3,    output: 15,  cacheWrite: 3.75,  cacheRead: 0.30 },
-  'claude-haiku-4-5': { input: 0.80, output: 4,   cacheWrite: 1.00,  cacheRead: 0.08 },
-  'claude-haiku-4-5-20251001': { input: 0.80, output: 4, cacheWrite: 1.00, cacheRead: 0.08 },
+  'claude-haiku-4-5': { input: 1,    output: 5,   cacheWrite: 1.25,  cacheRead: 0.10 },
+  'claude-haiku-4-5-20251001': { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.10 },
 };
 
 const SONNET_INPUT_PRICE = 3; // per million tokens, used for cache savings estimate
