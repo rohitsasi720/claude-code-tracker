@@ -17,13 +17,21 @@ const PROJECTS_DIR = path.join(CLAUDE_DIR, 'projects');
 
 // ── Pricing ───────────────────────────────────────────────────────────────────
 
+// Per-million-token USD list rates from anthropic.com/pricing.
+// Opus 4.5+ was repriced from $15/$75 to $5/$25 (cache write/read scaled
+// proportionally). Opus 4.1 and earlier remain on the legacy $15/$75 tier.
+// cacheWrite5m = 1.25x input, cacheWrite1h = 2x input, cacheRead = 0.1x input.
 const PRICING = {
-  'claude-opus-4-6':  { input: 15,   output: 75,  cacheWrite: 18.75, cacheRead: 1.50 },
-  'claude-opus-4-5':  { input: 15,   output: 75,  cacheWrite: 18.75, cacheRead: 1.50 },
-  'claude-sonnet-4-6':{ input: 3,    output: 15,  cacheWrite: 3.75,  cacheRead: 0.30 },
-  'claude-sonnet-4-5':{ input: 3,    output: 15,  cacheWrite: 3.75,  cacheRead: 0.30 },
-  'claude-haiku-4-5': { input: 0.80, output: 4,   cacheWrite: 1.00,  cacheRead: 0.08 },
-  'claude-haiku-4-5-20251001': { input: 0.80, output: 4, cacheWrite: 1.00, cacheRead: 0.08 },
+  'claude-opus-4-7':  { input: 5,    output: 25,  cacheWrite5m: 6.25,  cacheWrite1h: 10,    cacheRead: 0.50 },
+  'claude-opus-4-6':  { input: 5,    output: 25,  cacheWrite5m: 6.25,  cacheWrite1h: 10,    cacheRead: 0.50 },
+  'claude-opus-4-5':  { input: 5,    output: 25,  cacheWrite5m: 6.25,  cacheWrite1h: 10,    cacheRead: 0.50 },
+  'claude-opus-4-1':  { input: 15,   output: 75,  cacheWrite5m: 18.75, cacheWrite1h: 30,    cacheRead: 1.50 },
+  'claude-opus-4':    { input: 15,   output: 75,  cacheWrite5m: 18.75, cacheWrite1h: 30,    cacheRead: 1.50 },
+  'claude-sonnet-4-7':{ input: 3,    output: 15,  cacheWrite5m: 3.75,  cacheWrite1h: 6,     cacheRead: 0.30 },
+  'claude-sonnet-4-6':{ input: 3,    output: 15,  cacheWrite5m: 3.75,  cacheWrite1h: 6,     cacheRead: 0.30 },
+  'claude-sonnet-4-5':{ input: 3,    output: 15,  cacheWrite5m: 3.75,  cacheWrite1h: 6,     cacheRead: 0.30 },
+  'claude-haiku-4-5': { input: 1,    output: 5,   cacheWrite5m: 1.25,  cacheWrite1h: 2,     cacheRead: 0.10 },
+  'claude-haiku-4-5-20251001': { input: 1, output: 5, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.10 },
 };
 
 const SONNET_INPUT_PRICE = 3; // per million tokens, used for cache savings estimate
@@ -46,10 +54,17 @@ function getPricing(model) {
 function calcCost(usage, model) {
   const price = getPricing(model);
   if (!price || !usage) return 0;
-  const input = (usage.input_tokens || 0) / 1e6 * price.input;
-  const output = (usage.output_tokens || 0) / 1e6 * price.output;
-  const cacheWrite = (usage.cache_creation_input_tokens || 0) / 1e6 * price.cacheWrite;
-  const cacheRead = (usage.cache_read_input_tokens || 0) / 1e6 * price.cacheRead;
+  // cache_creation tokens are billed differently for 5-minute vs 1-hour TTL.
+  // The 1-hour split is reported on usage.cache_creation; fall back to
+  // treating the total as 5-minute (the default TTL) if absent.
+  const cw1h = usage.cache_creation?.ephemeral_1h_input_tokens || 0;
+  const cw5mField = usage.cache_creation?.ephemeral_5m_input_tokens;
+  const cwTotal = usage.cache_creation_input_tokens || 0;
+  const cw5m = cw5mField != null ? cw5mField : Math.max(cwTotal - cw1h, 0);
+  const input      = (usage.input_tokens            || 0) / 1e6 * price.input;
+  const output     = (usage.output_tokens           || 0) / 1e6 * price.output;
+  const cacheWrite = cw5m / 1e6 * price.cacheWrite5m + cw1h / 1e6 * price.cacheWrite1h;
+  const cacheRead  = (usage.cache_read_input_tokens || 0) / 1e6 * price.cacheRead;
   return input + output + cacheWrite + cacheRead;
 }
 
