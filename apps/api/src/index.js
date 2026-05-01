@@ -26,6 +26,7 @@ const PRICING = {
   'claude-opus-4-6':  { input: 5,    output: 25,  cacheWrite5m: 6.25,  cacheWrite1h: 10,    cacheRead: 0.50 },
   'claude-opus-4-5':  { input: 5,    output: 25,  cacheWrite5m: 6.25,  cacheWrite1h: 10,    cacheRead: 0.50 },
   'claude-opus-4-1':  { input: 15,   output: 75,  cacheWrite5m: 18.75, cacheWrite1h: 30,    cacheRead: 1.50 },
+  'claude-opus-4':    { input: 15,   output: 75,  cacheWrite5m: 18.75, cacheWrite1h: 30,    cacheRead: 1.50 },
   'claude-sonnet-4-7':{ input: 3,    output: 15,  cacheWrite5m: 3.75,  cacheWrite1h: 6,     cacheRead: 0.30 },
   'claude-sonnet-4-6':{ input: 3,    output: 15,  cacheWrite5m: 3.75,  cacheWrite1h: 6,     cacheRead: 0.30 },
   'claude-sonnet-4-5':{ input: 3,    output: 15,  cacheWrite5m: 3.75,  cacheWrite1h: 6,     cacheRead: 0.30 },
