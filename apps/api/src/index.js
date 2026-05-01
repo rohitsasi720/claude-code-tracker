@@ -218,6 +218,10 @@ function parseSessionFile(filePath) {
   const filePaths = {};
   let model = null;
   const hourCounts = {};
+  // Per-assistant-message records used by computeAnalytics to bucket usage
+  // into the correct calendar day. Long sessions can span multiple days, so
+  // we cannot just attribute the session total to firstTimestamp.
+  const messageBuckets = [];
 
   for (const [, { latestEntry, allContent }] of assistantMessages) {
     const msg = latestEntry.message;
@@ -225,11 +229,29 @@ function parseSessionFile(filePath) {
     const msgModel = msg.model || latestEntry.model;
     if (msgModel && !model) model = msgModel;
 
-    totalInput += usage.input_tokens || 0;
-    totalOutput += usage.output_tokens || 0;
-    totalCacheWrite += usage.cache_creation_input_tokens || 0;
-    totalCacheRead += usage.cache_read_input_tokens || 0;
-    totalCost += calcCost(usage, msgModel || model);
+    const msgInput      = usage.input_tokens                || 0;
+    const msgOutput     = usage.output_tokens               || 0;
+    const msgCacheWrite = usage.cache_creation_input_tokens || 0;
+    const msgCacheRead  = usage.cache_read_input_tokens     || 0;
+    const msgCost       = calcCost(usage, msgModel || model);
+
+    totalInput      += msgInput;
+    totalOutput     += msgOutput;
+    totalCacheWrite += msgCacheWrite;
+    totalCacheRead  += msgCacheRead;
+    totalCost       += msgCost;
+
+    const ts = latestEntry.timestamp;
+    const tsMs = ts ? (typeof ts === 'number' ? ts : new Date(ts).getTime()) : null;
+    messageBuckets.push({
+      ts: tsMs,
+      input: msgInput,
+      output: msgOutput,
+      cacheWrite: msgCacheWrite,
+      cacheRead: msgCacheRead,
+      cost: msgCost,
+      model: msgModel || model,
+    });
 
     // Count tool uses from accumulated content
     for (const block of allContent) {
@@ -243,10 +265,8 @@ function parseSessionFile(filePath) {
       }
     }
 
-    // Count tool errors from user messages (tool_result with is_error)
-    const ts = latestEntry.timestamp;
-    if (ts) {
-      const hour = new Date(typeof ts === 'number' ? ts : ts).getHours();
+    if (tsMs) {
+      const hour = new Date(tsMs).getHours();
       hourCounts[hour] = (hourCounts[hour] || 0) + 1;
     }
   }
@@ -287,6 +307,7 @@ function parseSessionFile(filePath) {
     messageCount,
     firstTimestamp,
     lastTimestamp,
+    messageBuckets,
   };
 }
 
@@ -352,19 +373,20 @@ function computeAnalytics() {
 
       if (!stats) continue;
 
-      // Determine the date for this session
-      let sessionDate = null;
-      if (stats.firstTimestamp) {
-        sessionDate = new Date(stats.firstTimestamp).toISOString().slice(0, 10);
-      }
-
-      // Add to day map
-      if (sessionDate && dayMap[sessionDate]) {
-        dayMap[sessionDate].input += stats.totalInput;
-        dayMap[sessionDate].output += stats.totalOutput;
-        dayMap[sessionDate].cacheWrite += stats.totalCacheWrite;
-        dayMap[sessionDate].cacheRead += stats.totalCacheRead;
-        dayMap[sessionDate].cost += stats.totalCost;
+      // Bucket each assistant message into its own calendar day. A long
+      // session can span multiple days, so attributing all of its tokens to
+      // firstTimestamp under-counts later days and over-counts the start day.
+      const fallbackDate = stats.firstTimestamp
+        ? new Date(stats.firstTimestamp).toISOString().slice(0, 10)
+        : null;
+      for (const m of stats.messageBuckets || []) {
+        const date = m.ts ? new Date(m.ts).toISOString().slice(0, 10) : fallbackDate;
+        if (!date || !dayMap[date]) continue;
+        dayMap[date].input      += m.input;
+        dayMap[date].output     += m.output;
+        dayMap[date].cacheWrite += m.cacheWrite;
+        dayMap[date].cacheRead  += m.cacheRead;
+        dayMap[date].cost       += m.cost;
       }
 
       // Totals
@@ -448,18 +470,20 @@ function computeAnalytics() {
   // avgMessages: we don't have per-session message counts aggregated here; skip or use 0
   const avgMessages = 0;
 
-  // Cost by time periods
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  // Cost by time periods. Comparing on milliseconds avoids the timezone trap
+  // where `new Date('YYYY-MM-DD')` parses as UTC midnight while the cutoff
+  // is built from local time. "Last 7 days" is today + 6 prior, inclusive.
+  const dayMs = 86400000;
+  const todayMs = Date.parse(today + 'T00:00:00');
+  const cutoff7  = todayMs - 6 * dayMs;
+  const cutoff30 = todayMs - 29 * dayMs;
 
   let costToday = 0, costLast7d = 0, costLast30d = 0;
-  for (const day of Object.values(dayMap)) {
-    const d = new Date(day.date);
-    if (day.date === today) costToday += day.cost;
-    if (d >= sevenDaysAgo) costLast7d += day.cost;
-    if (d >= thirtyDaysAgo) costLast30d += day.cost;
+  for (const d of Object.values(dayMap)) {
+    const dMs = Date.parse(d.date + 'T00:00:00');
+    if (d.date === today) costToday += d.cost;
+    if (dMs >= cutoff7)  costLast7d  += d.cost;
+    if (dMs >= cutoff30) costLast30d += d.cost;
   }
 
   const projection30d = (costLast7d / 7) * 30;
